@@ -20,10 +20,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ViewSidebar
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BarChart
@@ -63,6 +65,7 @@ import com.example.data.model.AssetSymbol
 import com.example.data.model.ChartStyle
 import com.example.data.model.Signal
 import com.example.data.model.Timeframe
+import com.example.ui.components.Mt5AccountDialog
 import com.example.ui.components.Mt5CandlestickChart
 import com.example.ui.components.Mt5MarketWatchSidebar
 import com.example.ui.components.Mt5OneClickTradeBar
@@ -98,9 +101,12 @@ fun Mt5TerminalScreen(
   val showBidAskLines by viewModel.showBidAskLines.collectAsState()
   val isAnalyzing by viewModel.isAnalyzing.collectAsState()
   val confluence by viewModel.currentConfluence.collectAsState()
+  val activeAccount by viewModel.activeAccount.collectAsState()
+  val accounts by viewModel.accounts.collectAsState()
 
   var isCrosshairActive by remember { mutableStateOf(false) }
   var isMarketWatchOpen by remember { mutableStateOf(false) }
+  var isAccountDialogOpen by remember { mutableStateOf(false) }
   var assetMenuExpanded by remember { mutableStateOf(false) }
   val scrollState = rememberScrollState()
 
@@ -253,6 +259,94 @@ fun Mt5TerminalScreen(
               imageVector = Icons.Default.GridOn,
               contentDescription = "Grade",
               tint = if (showGrid) Mt5BidBlue else Mt5TextSecondary,
+              modifier = Modifier.size(18.dp)
+            )
+          }
+        }
+      }
+
+      Spacer(modifier = Modifier.height(6.dp))
+
+      // MT5 Connected Account Status Bar (Corretora, Servidor, ID, Saldo e Conexão)
+      Box(
+        modifier = Modifier
+          .testTag("mt5_account_status_bar")
+          .fillMaxWidth()
+          .clip(RoundedCornerShape(10.dp))
+          .background(Mt5DarkSurface)
+          .border(1.dp, Mt5Border, RoundedCornerShape(10.dp))
+          .clickable { isAccountDialogOpen = true }
+          .padding(horizontal = 10.dp, vertical = 6.dp)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f)
+          ) {
+            Box(
+              modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(if (activeAccount?.isConnected == true) Mt5BullGreen else Mt5BearRed)
+            )
+            Column {
+              Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                  text = activeAccount?.server ?: "Desconectado",
+                  color = Mt5TextPrimary,
+                  fontWeight = FontWeight.Bold,
+                  fontSize = 11.sp,
+                  fontFamily = FontFamily.Monospace
+                )
+                Text(
+                  text = "• #${activeAccount?.login ?: "--"}",
+                  color = Mt5BidBlue,
+                  fontSize = 11.sp,
+                  fontFamily = FontFamily.Monospace
+                )
+              }
+              Text(
+                text = "${activeAccount?.broker ?: "Nenhuma conta"} • ${activeAccount?.accountType?.label ?: "Demo"}",
+                color = Mt5TextSecondary,
+                fontSize = 10.sp,
+                maxLines = 1
+              )
+            }
+          }
+
+          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(horizontalAlignment = Alignment.End) {
+              Text(
+                text = activeAccount?.formattedBalance ?: "$0.00",
+                color = Mt5BullGreen,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace
+              )
+              Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                  text = "Eq: ${activeAccount?.formattedEquity ?: "$0.00"}",
+                  color = Mt5TextSecondary,
+                  fontSize = 9.sp,
+                  fontFamily = FontFamily.Monospace
+                )
+                Text(
+                  text = "• ⚡ ${activeAccount?.pingMs ?: 0}ms",
+                  color = Mt5TextSecondary,
+                  fontSize = 9.sp
+                )
+              }
+            }
+
+            Icon(
+              imageVector = Icons.Default.AccountBalance,
+              contentDescription = "Gerenciar Contas MT5",
+              tint = Mt5BidBlue,
               modifier = Modifier.size(18.dp)
             )
           }
@@ -478,6 +572,23 @@ Take Profit 3: ${"%.${sig.symbol.decimals}f".format(sig.tp3)}
         viewModel.selectAsset(asset)
       },
       onClose = { isMarketWatchOpen = false }
+    )
+
+    // MT5 Connected Account Manager Dialog
+    Mt5AccountDialog(
+      isOpen = isAccountDialogOpen,
+      onDismiss = { isAccountDialogOpen = false },
+      activeAccount = activeAccount,
+      accounts = accounts,
+      onConnectAccount = { broker, server, login, password, type, mode, leverage ->
+        viewModel.connectOrUpdateAccount(broker, server, login, password, type, mode, leverage)
+      },
+      onSelectAccount = { accId ->
+        viewModel.switchActiveAccount(accId)
+      },
+      onDeleteAccount = { accId ->
+        viewModel.deleteAccount(accId)
+      }
     )
   }
 }

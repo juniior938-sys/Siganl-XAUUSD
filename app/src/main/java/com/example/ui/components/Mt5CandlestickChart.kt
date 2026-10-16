@@ -19,9 +19,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
@@ -44,10 +46,8 @@ import com.example.ui.theme.Mt5Border
 import com.example.ui.theme.Mt5BullGreen
 import com.example.ui.theme.Mt5Crosshair
 import com.example.ui.theme.Mt5DarkBackground
-import com.example.ui.theme.Mt5DarkSurfaceElevated
 import com.example.ui.theme.Mt5GridLine
 import com.example.ui.theme.Mt5Purple
-import com.example.ui.theme.Mt5TextPrimary
 import com.example.ui.theme.Mt5TextSecondary
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -87,24 +87,24 @@ fun Mt5CandlestickChart(
           .pointerInput(candles, isCrosshairActive) {
             detectTapGestures(
               onTap = { offset ->
-                val candleWidth = (size.width - 64.dp.toPx()) / candles.size
+                val candleWidth = ((size.width - 64.dp.toPx()) / candles.size).coerceAtLeast(1f)
                 val idx = (offset.x / candleWidth).toInt().coerceIn(0, candles.size - 1)
                 crosshairIndex = idx
-                crosshairY = offset.y
+                crosshairY = offset.y.coerceIn(0f, size.height.toFloat())
               }
             )
           }
           .pointerInput(candles, isCrosshairActive) {
             detectDragGestures(
               onDragStart = { offset ->
-                val candleWidth = (size.width - 64.dp.toPx()) / candles.size
+                val candleWidth = ((size.width - 64.dp.toPx()) / candles.size).coerceAtLeast(1f)
                 crosshairIndex = (offset.x / candleWidth).toInt().coerceIn(0, candles.size - 1)
-                crosshairY = offset.y
+                crosshairY = offset.y.coerceIn(0f, size.height.toFloat())
               },
               onDrag = { change, _ ->
-                val candleWidth = (size.width - 64.dp.toPx()) / candles.size
+                val candleWidth = ((size.width - 64.dp.toPx()) / candles.size).coerceAtLeast(1f)
                 crosshairIndex = (change.position.x / candleWidth).toInt().coerceIn(0, candles.size - 1)
-                crosshairY = change.position.y
+                crosshairY = change.position.y.coerceIn(0f, size.height.toFloat())
               },
               onDragEnd = {}
             )
@@ -118,8 +118,8 @@ fun Mt5CandlestickChart(
         val paddingTop = 26.dp.toPx()
         val volumeHeight = if (showVolumes) 45.dp.toPx() else 0f
 
-        val chartWidth = width - paddingRight
-        val chartHeight = height - paddingTop - paddingBottom - volumeHeight
+        val chartWidth = (width - paddingRight).coerceAtLeast(10f)
+        val chartHeight = (height - paddingTop - paddingBottom - volumeHeight).coerceAtLeast(10f)
 
         // Min and Max price calculations
         var minPrice = candles.minOf { it.low }
@@ -138,7 +138,7 @@ fun Mt5CandlestickChart(
         val range = (maxPrice - minPrice).coerceAtLeast(0.0001f)
         val expandedMin = minPrice - range * 0.04f
         val expandedMax = maxPrice + range * 0.05f
-        val effectiveRange = expandedMax - expandedMin
+        val effectiveRange = (expandedMax - expandedMin).coerceAtLeast(0.0001f)
 
         fun priceToY(price: Float): Float {
           val norm = (price - expandedMin) / effectiveRange
@@ -169,10 +169,11 @@ fun Mt5CandlestickChart(
           }
 
           // Right Price Scale Number (MetaTrader 5 style)
-          drawText(
+          val labelY = (y - 6.dp.toPx()).coerceIn(0f, (height - 14.dp.toPx()).coerceAtLeast(0f))
+          drawSafeText(
             textMeasurer = textMeasurer,
             text = formatMt5Price(priceAtY.toDouble(), symbol.decimals),
-            topLeft = Offset(chartWidth + 5.dp.toPx(), y - 6.dp.toPx()),
+            topLeft = Offset(chartWidth + 5.dp.toPx(), labelY),
             style = TextStyle(
               color = Mt5TextSecondary,
               fontSize = 10.sp,
@@ -182,7 +183,7 @@ fun Mt5CandlestickChart(
         }
 
         // Vertical Grid lines & Time marks
-        val candleCount = candles.size
+        val candleCount = candles.size.coerceAtLeast(1)
         val candleSpacing = chartWidth / candleCount
         val candleBarWidth = (candleSpacing * 0.68f).coerceAtLeast(3f)
 
@@ -201,10 +202,11 @@ fun Mt5CandlestickChart(
           }
 
           val timeStr = timeFormat.format(Date(candles[t].timestamp))
-          drawText(
+          val timeY = (height - 16.dp.toPx()).coerceIn(0f, (height - 14.dp.toPx()).coerceAtLeast(0f))
+          drawSafeText(
             textMeasurer = textMeasurer,
             text = timeStr,
-            topLeft = Offset(x - 14.dp.toPx(), height - 16.dp.toPx()),
+            topLeft = Offset((x - 14.dp.toPx()).coerceAtLeast(0f), timeY),
             style = TextStyle(
               color = Mt5TextSecondary,
               fontSize = 9.sp,
@@ -229,7 +231,7 @@ fun Mt5CandlestickChart(
 
         // 3. Volume Sub-Chart at Bottom
         if (showVolumes) {
-          val maxVol = candles.maxOfOrNull { it.volume } ?: 100f
+          val maxVol = (candles.maxOfOrNull { it.volume } ?: 100f).coerceAtLeast(1f)
           val volBaseY = height - paddingBottom
 
           for (i in candles.indices) {
@@ -266,7 +268,7 @@ fun Mt5CandlestickChart(
                 size = Size(rightX - leftX, kotlin.math.abs(bottomY - topY)),
                 style = Stroke(width = 1.dp.toPx())
               )
-              drawText(
+              drawSafeText(
                 textMeasurer = textMeasurer,
                 text = "OB",
                 topLeft = Offset(leftX + 2.dp.toPx(), minOf(topY, bottomY) + 1.dp.toPx()),
@@ -284,7 +286,7 @@ fun Mt5CandlestickChart(
                 topLeft = Offset(leftX, minOf(topY, bottomY)),
                 size = Size(rightX - leftX, kotlin.math.abs(bottomY - topY))
               )
-              drawText(
+              drawSafeText(
                 textMeasurer = textMeasurer,
                 text = "FVG",
                 topLeft = Offset(leftX + 2.dp.toPx(), minOf(topY, bottomY) + 1.dp.toPx()),
@@ -303,7 +305,7 @@ fun Mt5CandlestickChart(
                 strokeWidth = 1.2.dp.toPx(),
                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
               )
-              drawText(
+              drawSafeText(
                 textMeasurer = textMeasurer,
                 text = "BOS",
                 topLeft = Offset(startX + (endX - startX) / 2 - 8.dp.toPx(), lineY - 12.dp.toPx()),
@@ -407,54 +409,63 @@ fun Mt5CandlestickChart(
           val tpY = priceToY(sig.tp1.toFloat())
 
           // Entry line
-          drawLine(
-            color = Mt5BullGreen,
-            start = Offset(chartWidth * 0.35f, entryY),
-            end = Offset(chartWidth, entryY),
-            strokeWidth = 1.2.dp.toPx()
-          )
-          drawText(
-            textMeasurer = textMeasurer,
-            text = "BUY 0.10",
-            topLeft = Offset(chartWidth - 56.dp.toPx(), entryY - 12.dp.toPx()),
-            style = TextStyle(color = Mt5BullGreen, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-          )
+          if (entryY in paddingTop..(height - paddingBottom)) {
+            drawLine(
+              color = Mt5BullGreen,
+              start = Offset(chartWidth * 0.35f, entryY),
+              end = Offset(chartWidth, entryY),
+              strokeWidth = 1.2.dp.toPx()
+            )
+            val entryLabelY = (entryY - 12.dp.toPx()).coerceIn(0f, (height - 14.dp.toPx()).coerceAtLeast(0f))
+            drawSafeText(
+              textMeasurer = textMeasurer,
+              text = "BUY 0.10",
+              topLeft = Offset(chartWidth - 56.dp.toPx(), entryLabelY),
+              style = TextStyle(color = Mt5BullGreen, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+            )
+          }
 
           // Stop Loss line (Red Dashed)
-          drawLine(
-            color = Mt5BearRed,
-            start = Offset(chartWidth * 0.35f, slY),
-            end = Offset(chartWidth, slY),
-            strokeWidth = 1.2.dp.toPx(),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 4f), 0f)
-          )
-          drawText(
-            textMeasurer = textMeasurer,
-            text = "SL ${formatMt5Price(sig.stopLoss, symbol.decimals)}",
-            topLeft = Offset(chartWidth - 62.dp.toPx(), slY - 12.dp.toPx()),
-            style = TextStyle(color = Mt5BearRed, fontSize = 8.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-          )
+          if (slY in paddingTop..(height - paddingBottom)) {
+            drawLine(
+              color = Mt5BearRed,
+              start = Offset(chartWidth * 0.35f, slY),
+              end = Offset(chartWidth, slY),
+              strokeWidth = 1.2.dp.toPx(),
+              pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 4f), 0f)
+            )
+            val slLabelY = (slY - 12.dp.toPx()).coerceIn(0f, (height - 14.dp.toPx()).coerceAtLeast(0f))
+            drawSafeText(
+              textMeasurer = textMeasurer,
+              text = "SL ${formatMt5Price(sig.stopLoss, symbol.decimals)}",
+              topLeft = Offset(chartWidth - 62.dp.toPx(), slLabelY),
+              style = TextStyle(color = Mt5BearRed, fontSize = 8.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+            )
+          }
 
           // Take Profit line (Green Dashed)
-          drawLine(
-            color = Mt5BullGreen,
-            start = Offset(chartWidth * 0.35f, tpY),
-            end = Offset(chartWidth, tpY),
-            strokeWidth = 1.2.dp.toPx(),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 4f), 0f)
-          )
-          drawText(
-            textMeasurer = textMeasurer,
-            text = "TP ${formatMt5Price(sig.tp1, symbol.decimals)}",
-            topLeft = Offset(chartWidth - 62.dp.toPx(), tpY - 12.dp.toPx()),
-            style = TextStyle(color = Mt5BullGreen, fontSize = 8.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-          )
+          if (tpY in paddingTop..(height - paddingBottom)) {
+            drawLine(
+              color = Mt5BullGreen,
+              start = Offset(chartWidth * 0.35f, tpY),
+              end = Offset(chartWidth, tpY),
+              strokeWidth = 1.2.dp.toPx(),
+              pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 4f), 0f)
+            )
+            val tpLabelY = (tpY - 12.dp.toPx()).coerceIn(0f, (height - 14.dp.toPx()).coerceAtLeast(0f))
+            drawSafeText(
+              textMeasurer = textMeasurer,
+              text = "TP ${formatMt5Price(sig.tp1, symbol.decimals)}",
+              topLeft = Offset(chartWidth - 62.dp.toPx(), tpLabelY),
+              style = TextStyle(color = Mt5BullGreen, fontSize = 8.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+            )
+          }
         }
 
         // 7. Live Real-Time MT5 Bid and Ask Lines
         if (showBidAskLines && quote != null) {
-          val bidY = priceToY(quote.bid.toFloat())
-          val askY = priceToY(quote.ask.toFloat())
+          val bidY = priceToY(quote.bid.toFloat()).coerceIn(paddingTop, height - paddingBottom)
+          val askY = priceToY(quote.ask.toFloat()).coerceIn(paddingTop, height - paddingBottom)
 
           // Bid Line (Solid Blue)
           drawLine(
@@ -474,37 +485,39 @@ fun Mt5CandlestickChart(
           )
 
           // Right Price Badges for Bid and Ask
+          val bidTagY = (bidY - 8.dp.toPx()).coerceIn(paddingTop, (height - paddingBottom - 16.dp.toPx()).coerceAtLeast(paddingTop))
           drawRect(
             color = Mt5BidBlue,
-            topLeft = Offset(chartWidth + 1.dp.toPx(), bidY - 8.dp.toPx()),
+            topLeft = Offset(chartWidth + 1.dp.toPx(), bidTagY),
             size = Size(paddingRight - 2.dp.toPx(), 16.dp.toPx())
           )
-          drawText(
+          drawSafeText(
             textMeasurer = textMeasurer,
             text = quote.formattedBid,
-            topLeft = Offset(chartWidth + 4.dp.toPx(), bidY - 6.dp.toPx()),
+            topLeft = Offset(chartWidth + 4.dp.toPx(), bidTagY + 2.dp.toPx()),
             style = TextStyle(color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
           )
 
+          val askTagY = (askY - 8.dp.toPx()).coerceIn(paddingTop, (height - paddingBottom - 16.dp.toPx()).coerceAtLeast(paddingTop))
           drawRect(
             color = Mt5AskRed,
-            topLeft = Offset(chartWidth + 1.dp.toPx(), askY - 8.dp.toPx()),
+            topLeft = Offset(chartWidth + 1.dp.toPx(), askTagY),
             size = Size(paddingRight - 2.dp.toPx(), 16.dp.toPx())
           )
-          drawText(
+          drawSafeText(
             textMeasurer = textMeasurer,
             text = quote.formattedAsk,
-            topLeft = Offset(chartWidth + 4.dp.toPx(), askY - 6.dp.toPx()),
+            topLeft = Offset(chartWidth + 4.dp.toPx(), askTagY + 2.dp.toPx()),
             style = TextStyle(color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
           )
         }
 
         // 8. Crosshair Cursor (with exact price & timestamp at intersection point)
-        val activeCrosshairIndex = crosshairIndex ?: if (isCrosshairActive) candleCount - 5 else null
+        val activeCrosshairIndex = crosshairIndex ?: if (isCrosshairActive) (candleCount - 5).coerceAtLeast(0) else null
         if (activeCrosshairIndex != null) {
           val candle = candles[activeCrosshairIndex.coerceIn(0, candleCount - 1)]
-          val cX = activeCrosshairIndex * candleSpacing + candleSpacing / 2f
-          val cY = crosshairY ?: priceToY(candle.close)
+          val cX = (activeCrosshairIndex * candleSpacing + candleSpacing / 2f).coerceIn(0f, chartWidth)
+          val cY = (crosshairY ?: priceToY(candle.close)).coerceIn(paddingTop, height - paddingBottom)
           val priceAtCursor = yToPrice(cY)
           val timeAtCursor = fullDateTimeFormat.format(Date(candle.timestamp))
 
@@ -540,8 +553,10 @@ fun Mt5CandlestickChart(
           val badgeText = "${formatMt5Price(priceAtCursor.toDouble(), symbol.decimals)} | $timeAtCursor"
           val badgeWidth = 148.dp.toPx()
           val badgeHeight = 22.dp.toPx()
-          val badgeX = if (cX + badgeWidth + 10.dp.toPx() < chartWidth) cX + 10.dp.toPx() else cX - badgeWidth - 10.dp.toPx()
-          val badgeY = if (cY - badgeHeight - 8.dp.toPx() > paddingTop) cY - badgeHeight - 8.dp.toPx() else cY + 10.dp.toPx()
+          val rawBadgeX = if (cX + badgeWidth + 10.dp.toPx() < chartWidth) cX + 10.dp.toPx() else cX - badgeWidth - 10.dp.toPx()
+          val rawBadgeY = if (cY - badgeHeight - 8.dp.toPx() > paddingTop) cY - badgeHeight - 8.dp.toPx() else cY + 10.dp.toPx()
+          val badgeX = rawBadgeX.coerceIn(4.dp.toPx(), (width - badgeWidth - 4.dp.toPx()).coerceAtLeast(4.dp.toPx()))
+          val badgeY = rawBadgeY.coerceIn(paddingTop, (height - badgeHeight - 4.dp.toPx()).coerceAtLeast(paddingTop))
 
           drawRoundRect(
             color = Color(0xEE1E222D),
@@ -556,7 +571,7 @@ fun Mt5CandlestickChart(
             cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
             style = Stroke(width = 1.2.dp.toPx())
           )
-          drawText(
+          drawSafeText(
             textMeasurer = textMeasurer,
             text = badgeText,
             topLeft = Offset(badgeX + 6.dp.toPx(), badgeY + 4.dp.toPx()),
@@ -569,28 +584,31 @@ fun Mt5CandlestickChart(
           )
 
           // Right axis crosshair price tag
+          val tagY = (cY - 8.dp.toPx()).coerceIn(paddingTop, (height - paddingBottom - 16.dp.toPx()).coerceAtLeast(paddingTop))
           drawRect(
             color = Color.White,
-            topLeft = Offset(chartWidth + 1.dp.toPx(), cY - 8.dp.toPx()),
+            topLeft = Offset(chartWidth + 1.dp.toPx(), tagY),
             size = Size(paddingRight - 2.dp.toPx(), 16.dp.toPx())
           )
-          drawText(
+          drawSafeText(
             textMeasurer = textMeasurer,
             text = formatMt5Price(priceAtCursor.toDouble(), symbol.decimals),
-            topLeft = Offset(chartWidth + 4.dp.toPx(), cY - 6.dp.toPx()),
+            topLeft = Offset(chartWidth + 4.dp.toPx(), tagY + 2.dp.toPx()),
             style = TextStyle(color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
           )
 
           // Bottom axis crosshair time tag
+          val timeTagX = (cX - 24.dp.toPx()).coerceIn(0f, (width - 48.dp.toPx()).coerceAtLeast(0f))
+          val timeTagY = (height - paddingBottom + 2.dp.toPx()).coerceIn(0f, (height - 18.dp.toPx()).coerceAtLeast(0f))
           drawRect(
             color = Color.White,
-            topLeft = Offset(cX - 24.dp.toPx(), height - paddingBottom + 2.dp.toPx()),
+            topLeft = Offset(timeTagX, timeTagY),
             size = Size(48.dp.toPx(), 16.dp.toPx())
           )
-          drawText(
+          drawSafeText(
             textMeasurer = textMeasurer,
             text = timeFormat.format(Date(candle.timestamp)),
-            topLeft = Offset(cX - 20.dp.toPx(), height - paddingBottom + 4.dp.toPx()),
+            topLeft = Offset(timeTagX + 4.dp.toPx(), timeTagY + 2.dp.toPx()),
             style = TextStyle(color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
           )
         }
@@ -600,7 +618,7 @@ fun Mt5CandlestickChart(
         val ohlcText = "O: ${formatMt5Price(activeCandle.open.toDouble(), symbol.decimals)}  H: ${formatMt5Price(activeCandle.high.toDouble(), symbol.decimals)}  L: ${formatMt5Price(activeCandle.low.toDouble(), symbol.decimals)}  C: ${formatMt5Price(activeCandle.close.toDouble(), symbol.decimals)}"
         val ohlcColor = if (activeCandle.isBullish) Mt5BullGreen else Mt5BearRed
 
-        drawText(
+        drawSafeText(
           textMeasurer = textMeasurer,
           text = ohlcText,
           topLeft = Offset(8.dp.toPx(), 6.dp.toPx()),
@@ -614,6 +632,30 @@ fun Mt5CandlestickChart(
       }
     }
   }
+}
+
+/**
+ * Safe wrapper for DrawScope.drawText that ensures positive constraints for width and height,
+ * preventing IllegalArgumentException: maxHeight must be >= minHeight.
+ */
+private fun DrawScope.drawSafeText(
+  textMeasurer: TextMeasurer,
+  text: String,
+  topLeft: Offset,
+  style: TextStyle
+) {
+  val safeX = topLeft.x.coerceIn(0f, (size.width - 2f).coerceAtLeast(0f))
+  val safeY = topLeft.y.coerceIn(0f, (size.height - 2f).coerceAtLeast(0f))
+  val maxW = (size.width - safeX).coerceAtLeast(1f)
+  val maxH = (size.height - safeY).coerceAtLeast(1f)
+
+  drawText(
+    textMeasurer = textMeasurer,
+    text = text,
+    topLeft = Offset(safeX, safeY),
+    style = style,
+    size = Size(maxW, maxH)
+  )
 }
 
 private fun formatMt5Price(price: Double, decimals: Int): String {

@@ -22,6 +22,10 @@ import com.example.data.repository.TradingDataRepository
 import com.example.data.engine.ConfluenceDecision
 import com.example.data.engine.QuantitativeConfluenceEngine
 import com.example.data.engine.QuantitativeEngineConfig
+import com.example.data.model.Mt5Account
+import com.example.data.model.Mt5AccountType
+import com.example.data.model.Mt5AccountingMode
+import com.example.data.repository.Mt5AccountRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -33,8 +37,12 @@ import kotlinx.coroutines.launch
 class MegaTradingViewModel(application: Application) : AndroidViewModel(application) {
 
   val repository = TradingDataRepository()
+  val accountRepository = Mt5AccountRepository(application.applicationContext)
   private val geminiService = GeminiApiService()
   val soundManager = SciFiSoundManager(application)
+
+  val activeAccount: StateFlow<Mt5Account?> = accountRepository.activeAccount
+  val accounts: StateFlow<List<Mt5Account>> = accountRepository.accounts
 
   private val _selectedAsset = MutableStateFlow(AssetSymbol.XAUUSD)
   val selectedAsset: StateFlow<AssetSymbol> = _selectedAsset.asStateFlow()
@@ -180,9 +188,52 @@ class MegaTradingViewModel(application: Application) : AndroidViewModel(applicat
     // Play classic MT5 order click!
     soundManager.playSignalAlert(SoundAlertTone.MT5_ORDER_CLICK, triggerHaptic = true)
 
+    // Update margin and equity on active MT5 account
+    accountRepository.onTradeExecuted(direction, lots)
+
     val msg = "Ordem #${(100000..999999).random()}: ${direction.label} %.2f ${asset.code} a %.${asset.decimals}f executada com sucesso!"
       .format(lots, execPrice)
     Toast.makeText(getApplication(), msg, Toast.LENGTH_SHORT).show()
+  }
+
+  fun connectOrUpdateAccount(
+    broker: String,
+    server: String,
+    login: String,
+    password: String,
+    type: Mt5AccountType,
+    mode: Mt5AccountingMode,
+    leverage: String
+  ) {
+    val newAccount = Mt5Account(
+      broker = broker,
+      server = server,
+      login = login,
+      password = password,
+      accountType = type,
+      accountingMode = mode,
+      leverage = leverage,
+      currency = "USD",
+      balance = 10000.0,
+      equity = 10000.0,
+      margin = 0.0,
+      freeMargin = 10000.0,
+      marginLevel = 0.0,
+      isConnected = true,
+      pingMs = kotlin.random.Random.nextInt(18, 42)
+    )
+    accountRepository.addOrUpdateAccount(newAccount)
+    soundManager.playSignalAlert(SoundAlertTone.PRICE_PING, triggerHaptic = true)
+    Toast.makeText(getApplication(), "Conta MT5 $login ($server) conectada com sucesso!", Toast.LENGTH_SHORT).show()
+  }
+
+  fun switchActiveAccount(accountId: String) {
+    accountRepository.selectActiveAccount(accountId)
+    soundManager.playSignalAlert(SoundAlertTone.PRICE_PING, triggerHaptic = false)
+  }
+
+  fun deleteAccount(accountId: String) {
+    accountRepository.deleteAccount(accountId)
   }
 
   fun updateQuantConfig(newConfig: QuantitativeEngineConfig) {
