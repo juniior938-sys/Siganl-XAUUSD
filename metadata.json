@@ -1,0 +1,6 @@
+{
+  "name": "MEGA AI SIGNAL HUB",
+  "description": "Terminal de Trading estilo MetaTrader 5 com cotações e gráficos em tempo real, escalas verticais e horizontais MT5, e análise de Price Action via Gemini AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

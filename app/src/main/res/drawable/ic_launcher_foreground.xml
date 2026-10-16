@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Circle badge frame -->
+    <path
+        android:fillColor="#1E222D"
+        android:strokeColor="#2A2E39"
+        android:strokeWidth="1.5"
+        android:pathData="M 54,24 A 30,30 0 1,1 53.9,24" />
+
+    <!-- Candle 1: Teal Bullish -->
+    <path
+        android:strokeColor="#089981"
+        android:strokeWidth="1.8"
+        android:pathData="M 38,40 L 38,68" />
+    <path
+        android:fillColor="#089981"
+        android:pathData="M 35,46 H 41 V 62 H 35 Z" />
+
+    <!-- Candle 2: Red Bearish -->
+    <path
+        android:strokeColor="#F23645"
+        android:strokeWidth="1.8"
+        android:pathData="M 49,42 L 49,70" />
+    <path
+        android:fillColor="#F23645"
+        android:pathData="M 46,48 H 52 V 64 H 46 Z" />
+
+    <!-- Candle 3: Large Teal Bullish Breakout -->
+    <path
+        android:strokeColor="#089981"
+        android:strokeWidth="2"
+        android:pathData="M 60,34 L 60,66" />
+    <path
+        android:fillColor="#089981"
+        android:pathData="M 57,38 H 63 V 58 H 57 Z" />
+
+    <!-- Candle 4: Teal Continuation High -->
+    <path
+        android:strokeColor="#089981"
+        android:strokeWidth="2"
+        android:pathData="M 71,28 L 71,58" />
+    <path
+        android:fillColor="#089981"
+        android:pathData="M 68,32 H 74 V 50 H 68 Z" />
+
+    <!-- Blue MT5 Trendline -->
+    <path
+        android:strokeColor="#2962FF"
+        android:strokeWidth="2.5"
+        android:pathData="M 34,64 L 46,58 L 56,48 L 74,32" />
+
+</vector>
