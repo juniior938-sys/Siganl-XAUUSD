@@ -46,7 +46,8 @@ data class Mt5Quote(
 
 enum class SignalDirection(val label: String, val isBuy: Boolean) {
   BUY("BUY", true),
-  SELL("SELL", false)
+  SELL("SELL", false),
+  WAIT("WAIT", false)
 }
 
 enum class SignalStatus(val label: String) {
@@ -154,5 +155,15 @@ data class AiAnalysisResult(
   val tp3: Double,
   val confluences: List<String>,
   val timestamp: Long = System.currentTimeMillis(),
-  val groundingQuery: String? = null
-)
+  val groundingQuery: String? = null,
+  val marketRegime: String = "TENDÊNCIA DE ALTA",
+  val buyScore: Int = 85,
+  val sellScore: Int = 15,
+  val h4Trend: String = "ALTA",
+  val h1Trend: String = "ALTA",
+  val m15Trend: String = "ALTA",
+  val m5Trend: String = "ALTA",
+  val confluenceDecision: com.example.data.engine.ConfluenceDecision? = null
+) {
+  val isWait: Boolean get() = direction == SignalDirection.WAIT
+}

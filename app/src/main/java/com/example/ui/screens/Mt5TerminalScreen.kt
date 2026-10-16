@@ -97,6 +97,7 @@ fun Mt5TerminalScreen(
   val showVolumes by viewModel.showVolumes.collectAsState()
   val showBidAskLines by viewModel.showBidAskLines.collectAsState()
   val isAnalyzing by viewModel.isAnalyzing.collectAsState()
+  val confluence by viewModel.currentConfluence.collectAsState()
 
   var isCrosshairActive by remember { mutableStateOf(false) }
   var isMarketWatchOpen by remember { mutableStateOf(false) }
@@ -304,6 +305,86 @@ fun Mt5TerminalScreen(
         showGrid = showGrid,
         showBidAskLines = showBidAskLines
       )
+
+      Spacer(modifier = Modifier.height(6.dp))
+
+      // Multi-timeframe Confluence Quick Status Card
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .clip(RoundedCornerShape(10.dp))
+          .background(Mt5DarkSurface)
+          .border(
+            width = 1.dp,
+            color = when (confluence.direction) {
+              "BUY" -> Mt5BullGreen.copy(alpha = 0.5f)
+              "SELL" -> Mt5BearRed.copy(alpha = 0.5f)
+              else -> Mt5Amber.copy(alpha = 0.5f)
+            },
+            shape = RoundedCornerShape(10.dp)
+          )
+          .clickable { onNavigateToAnalyzer() }
+          .padding(horizontal = 10.dp, vertical = 6.dp)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            Box(
+              modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .background(
+                  when (confluence.direction) {
+                    "BUY" -> Mt5BullGreen
+                    "SELL" -> Mt5BearRed
+                    else -> Mt5Amber
+                  }
+                )
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+              Text(
+                text = confluence.direction,
+                color = Color.White,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
+              )
+            }
+
+            Text(
+              text = confluence.marketRegime.label,
+              color = Mt5TextPrimary,
+              style = MaterialTheme.typography.bodySmall,
+              fontSize = 11.sp,
+              fontWeight = FontWeight.SemiBold
+            )
+          }
+
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            Text(
+              text = "H4:${confluence.h4Trend.label.take(1)} H1:${confluence.h1Trend.label.take(1)} M15:${confluence.m15Trend.label.take(1)}",
+              color = Mt5TextSecondary,
+              fontSize = 10.sp,
+              fontFamily = FontFamily.Monospace
+            )
+            Text(
+              text = "Score: ${if (confluence.direction == "BUY") confluence.buyScore else if (confluence.direction == "SELL") confluence.sellScore else "${confluence.buyScore}/${confluence.sellScore}"}",
+              color = if (confluence.direction == "BUY") Mt5BullGreen else if (confluence.direction == "SELL") Mt5BearRed else Mt5Amber,
+              fontSize = 10.sp,
+              fontWeight = FontWeight.Bold,
+              fontFamily = FontFamily.Monospace
+            )
+          }
+        }
+      }
 
       Spacer(modifier = Modifier.height(8.dp))
 

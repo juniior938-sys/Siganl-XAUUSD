@@ -26,13 +26,19 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.TrendingDown
+import androidx.compose.material.icons.filled.TrendingFlat
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -55,6 +61,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.engine.MarketRegime
+import com.example.data.engine.TimeframeTrend
 import com.example.ui.theme.Mt5Amber
 import com.example.ui.theme.Mt5BearRed
 import com.example.ui.theme.Mt5BidBlue
@@ -77,6 +85,7 @@ fun Mt5AnalyzerScreen(
   val selectedTimeframe by viewModel.selectedTimeframe.collectAsState()
   val isAnalyzing by viewModel.isAnalyzing.collectAsState()
   val lastAnalysis by viewModel.lastAiAnalysis.collectAsState()
+  val confluence by viewModel.currentConfluence.collectAsState()
 
   var imageBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
   var customNotes by remember { mutableStateOf("") }
@@ -104,20 +113,270 @@ fun Mt5AnalyzerScreen(
   ) {
     // Header
     Text(
-      text = "Análise IA de Mercado",
+      text = "Motor Quantitativo de Confluência",
       color = Mt5TextPrimary,
       style = MaterialTheme.typography.headlineMedium,
       fontWeight = FontWeight.Bold
     )
     Text(
-      text = "Motor Gemini IA com Search Grounding e leitura de Price Action MT5",
+      text = "Análise multitimeframe (H4, H1, M15, M5), indicadores OHLC e IA Gemini MT5",
       color = Mt5TextSecondary,
       style = MaterialTheme.typography.bodyMedium
     )
 
+    Spacer(modifier = Modifier.height(12.dp))
+
+    // 1. Live Quantitative Confluence Radar Card
+    Box(
+      modifier = Modifier
+        .fillMaxWidth()
+        .clip(RoundedCornerShape(14.dp))
+        .background(Mt5DarkSurface)
+        .border(
+          width = 1.dp,
+          color = when (confluence.direction) {
+            "BUY" -> Mt5BullGreen
+            "SELL" -> Mt5BearRed
+            else -> Mt5Amber
+          },
+          shape = RoundedCornerShape(14.dp)
+        )
+        .padding(12.dp)
+    ) {
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Default.Speed,
+              contentDescription = null,
+              tint = Mt5BidBlue,
+              modifier = Modifier.size(18.dp)
+            )
+            Text(
+              text = "${selectedAsset.code} - ${selectedTimeframe.label}",
+              color = Mt5TextPrimary,
+              style = MaterialTheme.typography.titleMedium,
+              fontWeight = FontWeight.Bold,
+              fontFamily = FontFamily.Monospace
+            )
+          }
+
+          // Regime Badge
+          Box(
+            modifier = Modifier
+              .clip(RoundedCornerShape(6.dp))
+              .background(
+                when (confluence.marketRegime) {
+                  MarketRegime.UPTREND -> Mt5BullGreen.copy(alpha = 0.2f)
+                  MarketRegime.DOWNTREND -> Mt5BearRed.copy(alpha = 0.2f)
+                  MarketRegime.RANGING -> Mt5Amber.copy(alpha = 0.2f)
+                  MarketRegime.REGIME_TRANSITION -> Mt5BidBlue.copy(alpha = 0.2f)
+                  MarketRegime.EXTREME_VOLATILITY -> Color(0xFFFF1744).copy(alpha = 0.2f)
+                }
+              )
+              .padding(horizontal = 8.dp, vertical = 4.dp)
+          ) {
+            Text(
+              text = confluence.marketRegime.label,
+              color = when (confluence.marketRegime) {
+                MarketRegime.UPTREND -> Mt5BullGreen
+                MarketRegime.DOWNTREND -> Mt5BearRed
+                MarketRegime.RANGING -> Mt5Amber
+                MarketRegime.REGIME_TRANSITION -> Mt5BidBlue
+                MarketRegime.EXTREME_VOLATILITY -> Color(0xFFFF1744)
+              },
+              fontSize = 10.sp,
+              fontWeight = FontWeight.Bold
+            )
+          }
+        }
+
+        Text(
+          text = confluence.marketRegime.description,
+          color = Mt5TextSecondary,
+          fontSize = 11.sp,
+          lineHeight = 15.sp
+        )
+
+        // Multi-Timeframe Trend Matrix
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          TimeframeTrendPill("H4", confluence.h4Trend, Modifier.weight(1f))
+          TimeframeTrendPill("H1", confluence.h1Trend, Modifier.weight(1f))
+          TimeframeTrendPill("M15", confluence.m15Trend, Modifier.weight(1f))
+          TimeframeTrendPill("M5", confluence.m5Trend, Modifier.weight(1f))
+        }
+
+        // Confluence Scores (BUY vs SELL)
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(Mt5DarkSurfaceElevated)
+            .padding(10.dp),
+          verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text(
+              text = "PONTUAÇÃO BUY: ${confluence.buyScore}/100",
+              color = Mt5BullGreen,
+              style = MaterialTheme.typography.labelSmall,
+              fontWeight = FontWeight.Bold,
+              fontFamily = FontFamily.Monospace
+            )
+            Text(
+              text = "PONTUAÇÃO SELL: ${confluence.sellScore}/100",
+              color = Mt5BearRed,
+              style = MaterialTheme.typography.labelSmall,
+              fontWeight = FontWeight.Bold,
+              fontFamily = FontFamily.Monospace
+            )
+          }
+
+          // Progress visualizer
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            LinearProgressIndicator(
+              progress = { confluence.buyScore / 100f },
+              modifier = Modifier
+                .weight(1f)
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+              color = Mt5BullGreen,
+              trackColor = Mt5DarkBackground
+            )
+            LinearProgressIndicator(
+              progress = { confluence.sellScore / 100f },
+              modifier = Modifier
+                .weight(1f)
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+              color = Mt5BearRed,
+              trackColor = Mt5DarkBackground
+            )
+          }
+
+          // Decision Banner
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+              Icon(
+                imageVector = when (confluence.direction) {
+                  "BUY" -> Icons.Default.CheckCircle
+                  "SELL" -> Icons.Default.CheckCircle
+                  else -> Icons.Default.Warning
+                },
+                contentDescription = null,
+                tint = when (confluence.direction) {
+                  "BUY" -> Mt5BullGreen
+                  "SELL" -> Mt5BearRed
+                  else -> Mt5Amber
+                },
+                modifier = Modifier.size(16.dp)
+              )
+              Text(
+                text = "DECISÃO QUANTITATIVA: ${confluence.direction}",
+                color = when (confluence.direction) {
+                  "BUY" -> Mt5BullGreen
+                  "SELL" -> Mt5BearRed
+                  else -> Mt5Amber
+                },
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
+              )
+            }
+
+            Text(
+              text = if (confluence.direction == "WAIT") "Dif: ${kotlin.math.abs(confluence.buyScore - confluence.sellScore)} pts" else ">= 70 pts OK",
+              color = Mt5TextSecondary,
+              fontSize = 10.sp,
+              fontFamily = FontFamily.Monospace
+            )
+          }
+        }
+
+        // Score Breakdown Grid
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(Mt5DarkSurfaceElevated)
+            .padding(8.dp),
+          verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+          Text(
+            text = "Composição da Pontuação de Confluência:",
+            color = Mt5TextSecondary,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold
+          )
+          ScoreRow("Tendência Macro H4/H1", "${confluence.scoreBreakdown.macroTrendScore} / 25 pts")
+          ScoreRow("Estrutura e Direção M15", "${confluence.scoreBreakdown.m15StructureScore} / 15 pts")
+          ScoreRow("Momentum Agrupado (RSI/MACD/CCI)", "${confluence.scoreBreakdown.momentumScore} / 15 pts")
+          ScoreRow("Candles, Pavios e Rejeição", "${confluence.scoreBreakdown.candleWickScore} / 20 pts")
+          ScoreRow("Suporte, Resistência e Liquidez", "${confluence.scoreBreakdown.supportResistanceScore} / 15 pts")
+          ScoreRow("Volatilidade e Execução (ATR)", "${confluence.scoreBreakdown.volatilityScore} / 10 pts")
+        }
+
+        // Live Technical Indicator Telemetry
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(Mt5DarkSurfaceElevated)
+            .padding(8.dp),
+          verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+          Text(
+            text = "Telemetria de Indicadores em Tempo Real:",
+            color = Mt5TextSecondary,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold
+          )
+          val ind = confluence.indicators
+          val dec = selectedAsset.decimals
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            IndicatorTag("RSI 14", "%.1f".format(ind.rsi14), if (ind.rsi14 > 50) Mt5BullGreen else Mt5BearRed)
+            IndicatorTag("MACD Hist", "%.4f".format(ind.macdHist), if (ind.macdHist >= 0) Mt5BullGreen else Mt5BearRed)
+            IndicatorTag("Estocástico", "%.1f".format(ind.stochK), Mt5BidBlue)
+            IndicatorTag("ATR 14", "%.${dec}f".format(ind.atr14), Mt5Amber)
+          }
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            IndicatorTag("EMA 9", "%.${dec}f".format(ind.ema9), Mt5TextPrimary)
+            IndicatorTag("EMA 21", "%.${dec}f".format(ind.ema21), Mt5TextPrimary)
+            IndicatorTag("SMA 50", "%.${dec}f".format(ind.sma50), Mt5TextSecondary)
+            IndicatorTag("SMA 200", "%.${dec}f".format(ind.sma200), Mt5TextSecondary)
+          }
+        }
+      }
+    }
+
     Spacer(modifier = Modifier.height(14.dp))
 
-    // Chart Upload Card
+    // 2. Multimodal Vision & Chart Upload Card
     Box(
       modifier = Modifier
         .fillMaxWidth()
@@ -133,7 +392,7 @@ fun Mt5AnalyzerScreen(
           verticalAlignment = Alignment.CenterVertically
         ) {
           Text(
-            text = "Captura de Gráfico MT5 / TradingView",
+            text = "Análise Multimodal com Print MT5",
             color = Mt5TextPrimary,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold
@@ -192,7 +451,7 @@ fun Mt5AnalyzerScreen(
           Box(
             modifier = Modifier
               .fillMaxWidth()
-              .height(90.dp)
+              .height(80.dp)
               .clip(RoundedCornerShape(8.dp))
               .background(Mt5DarkSurfaceElevated)
               .border(1.dp, Mt5Border, RoundedCornerShape(8.dp))
@@ -208,11 +467,11 @@ fun Mt5AnalyzerScreen(
                 imageVector = Icons.Default.AddPhotoAlternate,
                 contentDescription = null,
                 tint = Mt5TextSecondary,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier.size(24.dp)
               )
               Spacer(modifier = Modifier.height(4.dp))
               Text(
-                text = "Toque para enviar print do seu gráfico MT5",
+                text = "Toque para enviar print do seu gráfico MT5 (Opcional)",
                 color = Mt5TextSecondary,
                 style = MaterialTheme.typography.bodyMedium,
                 fontSize = 11.sp
@@ -226,7 +485,7 @@ fun Mt5AnalyzerScreen(
         OutlinedTextField(
           value = customNotes,
           onValueChange = { customNotes = it },
-          label = { Text("Instruções adicionais ou confluências desejadas") },
+          label = { Text("Instruções ou confluências específicas") },
           placeholder = { Text("Ex: Confirmar rompimento de LTB e Order Block no M5...") },
           modifier = Modifier
             .fillMaxWidth()
@@ -239,7 +498,7 @@ fun Mt5AnalyzerScreen(
             focusedContainerColor = Mt5DarkSurfaceElevated,
             unfocusedContainerColor = Mt5DarkSurfaceElevated
           ),
-          maxLines = 3
+          maxLines = 2
         )
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -270,7 +529,7 @@ fun Mt5AnalyzerScreen(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-              text = "PROCESSANDO PRICE ACTION...",
+              text = "PROCESSANDO CONFLUÊNCIA...",
               style = MaterialTheme.typography.labelLarge,
               fontWeight = FontWeight.Bold
             )
@@ -294,15 +553,22 @@ fun Mt5AnalyzerScreen(
 
     Spacer(modifier = Modifier.height(14.dp))
 
-    // Analysis Result Card
+    // 3. Analysis Result Report Card
     lastAnalysis?.let { analysis ->
       val decimals = analysis.symbol.decimals
+      val isBuy = analysis.direction.isBuy
+      val isWait = analysis.isWait
+
       Box(
         modifier = Modifier
           .fillMaxWidth()
           .clip(RoundedCornerShape(14.dp))
           .background(Mt5DarkSurface)
-          .border(1.dp, if (analysis.direction.isBuy) Mt5BullGreen else Mt5BearRed, RoundedCornerShape(14.dp))
+          .border(
+            width = 1.dp,
+            color = if (isWait) Mt5Amber else if (isBuy) Mt5BullGreen else Mt5BearRed,
+            shape = RoundedCornerShape(14.dp)
+          )
           .padding(12.dp)
       ) {
         Column {
@@ -316,9 +582,9 @@ fun Mt5AnalyzerScreen(
               horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
               Icon(
-                imageVector = if (analysis.direction.isBuy) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                imageVector = if (isWait) Icons.Default.Warning else if (isBuy) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
                 contentDescription = null,
-                tint = if (analysis.direction.isBuy) Mt5BullGreen else Mt5BearRed,
+                tint = if (isWait) Mt5Amber else if (isBuy) Mt5BullGreen else Mt5BearRed,
                 modifier = Modifier.size(20.dp)
               )
               Text(
@@ -332,7 +598,7 @@ fun Mt5AnalyzerScreen(
 
             Text(
               text = "SINAL: ${analysis.direction.label}",
-              color = if (analysis.direction.isBuy) Mt5BullGreen else Mt5BearRed,
+              color = if (isWait) Mt5Amber else if (isBuy) Mt5BullGreen else Mt5BearRed,
               style = MaterialTheme.typography.titleMedium,
               fontWeight = FontWeight.Bold,
               fontFamily = FontFamily.Monospace
@@ -341,13 +607,24 @@ fun Mt5AnalyzerScreen(
 
           Spacer(modifier = Modifier.height(4.dp))
 
-          Text(
-            text = "Nível de Confiança: ${analysis.confidence}%",
-            color = Mt5BullGreen,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace
-          )
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Text(
+              text = "Regime: ${analysis.marketRegime}",
+              color = Mt5TextSecondary,
+              style = MaterialTheme.typography.labelSmall,
+              fontWeight = FontWeight.SemiBold
+            )
+            Text(
+              text = "Confiança: ${analysis.confidence}%",
+              color = if (isWait) Mt5Amber else Mt5BullGreen,
+              style = MaterialTheme.typography.labelSmall,
+              fontWeight = FontWeight.Bold,
+              fontFamily = FontFamily.Monospace
+            )
+          }
 
           Spacer(modifier = Modifier.height(8.dp))
 
@@ -360,7 +637,7 @@ fun Mt5AnalyzerScreen(
               .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
           ) {
-            AnalyzerRow("ENTRY (Entrada):", "%.${decimals}f".format(analysis.entry), Mt5BidBlue)
+            AnalyzerRow("ENTRY (Entrada MT5):", "%.${decimals}f".format(analysis.entry), Mt5BidBlue)
             AnalyzerRow("SL (Stop Loss):", "%.${decimals}f".format(analysis.stopLoss), Mt5BearRed)
             AnalyzerRow("TP1 (Primeiro Alvo):", "%.${decimals}f".format(analysis.tp1), Mt5BullGreen)
             AnalyzerRow("TP2 (Alvo Mediano):", "%.${decimals}f".format(analysis.tp2), Mt5BullGreen)
@@ -370,7 +647,7 @@ fun Mt5AnalyzerScreen(
           Spacer(modifier = Modifier.height(8.dp))
 
           Text(
-            text = "Confluências Técnicas Identificadas:",
+            text = "Confluências e Padrões Verificados:",
             color = Mt5TextSecondary,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold
@@ -398,7 +675,7 @@ fun Mt5AnalyzerScreen(
               modifier = Modifier.size(12.dp)
             )
             Text(
-              text = "Pesquisa e dados em tempo real verificados com Google Search Grounding",
+              text = "Pesquisa e cotações verificadas com Google Search Grounding",
               color = Mt5TextSecondary,
               fontSize = 9.sp,
               fontFamily = FontFamily.Monospace
@@ -409,6 +686,48 @@ fun Mt5AnalyzerScreen(
     }
 
     Spacer(modifier = Modifier.height(20.dp))
+  }
+}
+
+@Composable
+private fun TimeframeTrendPill(label: String, trend: TimeframeTrend, modifier: Modifier = Modifier) {
+  val color = when (trend) {
+    TimeframeTrend.BULLISH -> Mt5BullGreen
+    TimeframeTrend.BEARISH -> Mt5BearRed
+    TimeframeTrend.NEUTRAL -> Mt5Amber
+  }
+  Box(
+    modifier = modifier
+      .clip(RoundedCornerShape(6.dp))
+      .background(Mt5DarkSurfaceElevated)
+      .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+      .padding(vertical = 4.dp, horizontal = 4.dp),
+    contentAlignment = Alignment.Center
+  ) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+      Text(text = label, color = Mt5TextSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+      Text(text = trend.label, color = color, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+    }
+  }
+}
+
+@Composable
+private fun ScoreRow(title: String, score: String) {
+  Row(
+    modifier = Modifier.fillMaxWidth(),
+    horizontalArrangement = Arrangement.SpaceBetween,
+    verticalAlignment = Alignment.CenterVertically
+  ) {
+    Text(text = title, color = Mt5TextSecondary, fontSize = 10.sp)
+    Text(text = score, color = Mt5TextPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+  }
+}
+
+@Composable
+private fun IndicatorTag(label: String, value: String, color: Color) {
+  Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Text(text = label, color = Mt5TextSecondary, fontSize = 9.sp)
+    Text(text = value, color = color, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
   }
 }
 

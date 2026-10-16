@@ -24,10 +24,14 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -43,6 +47,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -79,6 +85,13 @@ fun Mt5SettingsScreen(
   var apiKeyInput by remember {
     mutableStateOf(BuildConfig.GEMINI_API_KEY.ifEmpty { "AIzaSyC8IO8UiQqIoTff8diAntauFTQQIM6jQLM" })
   }
+  var isApiKeyVisible by remember { mutableStateOf(false) }
+
+  val quantConfig by viewModel.quantConfig.collectAsState()
+  var emaFast by remember(quantConfig) { mutableStateOf(quantConfig.emaFastPeriod.toFloat()) }
+  var emaSlow by remember(quantConfig) { mutableStateOf(quantConfig.emaSlowPeriod.toFloat()) }
+  var rsiPeriod by remember(quantConfig) { mutableStateOf(quantConfig.rsiPeriod.toFloat()) }
+  var atrPeriod by remember(quantConfig) { mutableStateOf(quantConfig.atrPeriod.toFloat()) }
 
   val scrollState = rememberScrollState()
 
@@ -299,7 +312,7 @@ fun Mt5SettingsScreen(
 
     Spacer(modifier = Modifier.height(14.dp))
 
-    // 3. API Key Card
+    // 3. API Key Card (Oculta por padrão para segurança)
     Box(
       modifier = Modifier
         .fillMaxWidth()
@@ -310,17 +323,31 @@ fun Mt5SettingsScreen(
     ) {
       Column {
         Row(
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(6.dp)
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
         ) {
-          Icon(imageVector = Icons.Default.Key, contentDescription = null, tint = Mt5BidBlue, modifier = Modifier.size(18.dp))
-          Text(text = "Chave de Acesso Gemini API", color = Mt5TextPrimary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            Icon(imageVector = Icons.Default.Key, contentDescription = null, tint = Mt5BidBlue, modifier = Modifier.size(18.dp))
+            Text(text = "Chave de Acesso Gemini API", color = Mt5TextPrimary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+          }
+
+          Text(
+            text = if (isApiKeyVisible) "VISÍVEL" else "OCULTA",
+            color = if (isApiKeyVisible) Mt5BidBlue else Mt5TextSecondary,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace
+          )
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-          text = "Configuração do endpoint Gemini Flash para análise de Price Action e Search Grounding.",
+          text = "Endpoint protegido para cálculo de Price Action e análise quantitativa multimodal.",
           color = Mt5TextSecondary,
           style = MaterialTheme.typography.bodySmall
         )
@@ -330,10 +357,23 @@ fun Mt5SettingsScreen(
         OutlinedTextField(
           value = apiKeyInput,
           onValueChange = { apiKeyInput = it },
-          label = { Text("Chave da API") },
+          label = { Text("Chave da API (Oculta)") },
           modifier = Modifier
             .fillMaxWidth()
             .testTag("api_key_settings_input"),
+          visualTransformation = if (isApiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+          trailingIcon = {
+            IconButton(
+              onClick = { isApiKeyVisible = !isApiKeyVisible },
+              modifier = Modifier.testTag("toggle_api_key_visibility")
+            ) {
+              Icon(
+                imageVector = if (isApiKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                contentDescription = if (isApiKeyVisible) "Ocultar Chave" else "Mostrar Chave",
+                tint = Mt5BidBlue
+              )
+            }
+          },
           colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = Mt5BidBlue,
             unfocusedBorderColor = Mt5Border,
@@ -350,7 +390,7 @@ fun Mt5SettingsScreen(
         Button(
           onClick = {
             viewModel.setCustomApiKey(apiKeyInput)
-            Toast.makeText(context, "Chave atualizada com sucesso!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Chave atualizada e armazenada com segurança!", Toast.LENGTH_SHORT).show()
           },
           modifier = Modifier
             .fillMaxWidth()
@@ -361,6 +401,155 @@ fun Mt5SettingsScreen(
           Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
           Spacer(modifier = Modifier.width(6.dp))
           Text(text = "Salvar Chave", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        }
+      }
+    }
+
+    Spacer(modifier = Modifier.height(14.dp))
+
+    // 4. Quantitative Engine Parameters Card
+    Box(
+      modifier = Modifier
+        .fillMaxWidth()
+        .clip(RoundedCornerShape(14.dp))
+        .background(Mt5DarkSurface)
+        .border(1.dp, Mt5Border, RoundedCornerShape(14.dp))
+        .padding(12.dp)
+    ) {
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          Icon(imageVector = Icons.Default.Tune, contentDescription = null, tint = Mt5BidBlue, modifier = Modifier.size(18.dp))
+          Text(
+            text = "Motor Quantitativo Multitimeframe",
+            color = Mt5TextPrimary,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+          )
+        }
+
+        Text(
+          text = "Calibração dos indicadores técnicos: MACD, Ichimoku, Bollinger, RSI, ATR e Médias Móveis.",
+          color = Mt5TextSecondary,
+          style = MaterialTheme.typography.bodySmall
+        )
+
+        // EMA Fast
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Text(text = "EMA Rápida (Sinal Curto):", color = Mt5TextPrimary, style = MaterialTheme.typography.bodySmall)
+          Text(text = "${emaFast.toInt()}", color = Mt5BidBlue, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        }
+        Slider(
+          value = emaFast,
+          onValueChange = { emaFast = it },
+          valueRange = 5f..25f,
+          steps = 19,
+          colors = SliderDefaults.colors(thumbColor = Mt5BidBlue, activeTrackColor = Mt5BidBlue, inactiveTrackColor = Mt5Border)
+        )
+
+        // EMA Slow
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Text(text = "EMA Lenta (Tendência Micro):", color = Mt5TextPrimary, style = MaterialTheme.typography.bodySmall)
+          Text(text = "${emaSlow.toInt()}", color = Mt5BidBlue, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        }
+        Slider(
+          value = emaSlow,
+          onValueChange = { emaSlow = it },
+          valueRange = 15f..50f,
+          steps = 34,
+          colors = SliderDefaults.colors(thumbColor = Mt5BidBlue, activeTrackColor = Mt5BidBlue, inactiveTrackColor = Mt5Border)
+        )
+
+        // RSI Period
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Text(text = "Período RSI (Momentum):", color = Mt5TextPrimary, style = MaterialTheme.typography.bodySmall)
+          Text(text = "${rsiPeriod.toInt()}", color = Mt5BidBlue, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        }
+        Slider(
+          value = rsiPeriod,
+          onValueChange = { rsiPeriod = it },
+          valueRange = 7f..28f,
+          steps = 20,
+          colors = SliderDefaults.colors(thumbColor = Mt5BidBlue, activeTrackColor = Mt5BidBlue, inactiveTrackColor = Mt5Border)
+        )
+
+        // ATR Period
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Text(text = "Período ATR (Volatilidade):", color = Mt5TextPrimary, style = MaterialTheme.typography.bodySmall)
+          Text(text = "${atrPeriod.toInt()}", color = Mt5BidBlue, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        }
+        Slider(
+          value = atrPeriod,
+          onValueChange = { atrPeriod = it },
+          valueRange = 7f..30f,
+          steps = 22,
+          colors = SliderDefaults.colors(thumbColor = Mt5BidBlue, activeTrackColor = Mt5BidBlue, inactiveTrackColor = Mt5Border)
+        )
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          Button(
+            onClick = {
+              emaFast = 9f
+              emaSlow = 21f
+              rsiPeriod = 14f
+              atrPeriod = 14f
+              viewModel.updateQuantConfig(com.example.data.engine.QuantitativeEngineConfig())
+              Toast.makeText(context, "Parâmetros padrão MT5 restaurados!", Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier
+              .weight(1f)
+              .height(40.dp),
+            shape = RoundedCornerShape(8.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Mt5DarkSurfaceElevated, contentColor = Mt5TextPrimary)
+          ) {
+            Icon(imageVector = Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(text = "Padrão", fontSize = 11.sp)
+          }
+
+          Button(
+            onClick = {
+              viewModel.updateQuantConfig(
+                quantConfig.copy(
+                  emaFastPeriod = emaFast.toInt(),
+                  emaSlowPeriod = emaSlow.toInt(),
+                  rsiPeriod = rsiPeriod.toInt(),
+                  atrPeriod = atrPeriod.toInt()
+                )
+              )
+              Toast.makeText(context, "Parâmetros quantitativos salvos!", Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier
+              .weight(1f)
+              .height(40.dp),
+            shape = RoundedCornerShape(8.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Mt5BidBlue, contentColor = Color.White)
+          ) {
+            Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(text = "Aplicar", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+          }
         }
       }
     }

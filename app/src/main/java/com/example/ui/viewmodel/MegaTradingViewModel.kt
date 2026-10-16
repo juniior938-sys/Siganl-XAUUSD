@@ -19,6 +19,9 @@ import com.example.data.model.SoundAlertTone
 import com.example.data.model.Timeframe
 import com.example.data.remote.GeminiApiService
 import com.example.data.repository.TradingDataRepository
+import com.example.data.engine.ConfluenceDecision
+import com.example.data.engine.QuantitativeConfluenceEngine
+import com.example.data.engine.QuantitativeEngineConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,6 +44,10 @@ class MegaTradingViewModel(application: Application) : AndroidViewModel(applicat
 
   val quotes: StateFlow<Map<AssetSymbol, Mt5Quote>> = repository.quotes
   val signals: StateFlow<List<Signal>> = repository.signals
+
+  // Quantitative Engine Configuration
+  private val _quantConfig = MutableStateFlow(QuantitativeEngineConfig())
+  val quantConfig: StateFlow<QuantitativeEngineConfig> = _quantConfig.asStateFlow()
 
   // Chart Preferences
   private val _chartStyle = MutableStateFlow(ChartStyle.CANDLESTICKS)
@@ -80,6 +87,23 @@ class MegaTradingViewModel(application: Application) : AndroidViewModel(applicat
   ) { asset, tf, map ->
     map["${asset.code}_${tf.name}"] ?: repository.getCandles(asset, tf)
   }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+  // Real-time Quantitative Confluence Decision
+  val currentConfluence: StateFlow<ConfluenceDecision> = combine(
+    _selectedAsset,
+    _selectedTimeframe,
+    currentCandles,
+    quotes,
+    _quantConfig
+  ) { asset, tf, candles, quotesMap, cfg ->
+    val curPrice = quotesMap[asset]?.bid ?: 2671.0
+    QuantitativeConfluenceEngine.config = cfg
+    QuantitativeConfluenceEngine.evaluate(asset, tf, candles, curPrice)
+  }.stateIn(
+    viewModelScope,
+    SharingStarted.Eagerly,
+    QuantitativeConfluenceEngine.evaluate(AssetSymbol.XAUUSD, Timeframe.M5, emptyList(), 2671.0)
+  )
 
   // Current active signal for selected asset and timeframe
   val currentSignal: StateFlow<Signal?> = combine(
@@ -161,6 +185,10 @@ class MegaTradingViewModel(application: Application) : AndroidViewModel(applicat
     Toast.makeText(getApplication(), msg, Toast.LENGTH_SHORT).show()
   }
 
+  fun updateQuantConfig(newConfig: QuantitativeEngineConfig) {
+    _quantConfig.value = newConfig
+  }
+
   fun triggerGeminiAnalysis(
     chartBitmap: Bitmap? = null,
     customNotes: String? = null
@@ -169,6 +197,7 @@ class MegaTradingViewModel(application: Application) : AndroidViewModel(applicat
     val tf = _selectedTimeframe.value
     val quote = quotes.value[asset]
     val curPrice = quote?.bid ?: 2671.0
+    val candles = currentCandles.value
 
     viewModelScope.launch {
       _isAnalyzing.value = true
@@ -178,6 +207,7 @@ class MegaTradingViewModel(application: Application) : AndroidViewModel(applicat
         symbol = asset,
         timeframe = tf,
         currentPrice = curPrice,
+        candles = candles,
         imageBitmap = chartBitmap,
         userCustomNotes = customNotes
       )
@@ -185,27 +215,31 @@ class MegaTradingViewModel(application: Application) : AndroidViewModel(applicat
       result.onSuccess { analysis ->
         _lastAiAnalysis.value = analysis
 
-        val newSignal = Signal(
-          id = "ai_${System.currentTimeMillis()}",
-          symbol = asset,
-          timeframe = tf,
-          direction = analysis.direction,
-          confidence = analysis.confidence,
-          entry = analysis.entry,
-          stopLoss = analysis.stopLoss,
-          tp1 = analysis.tp1,
-          tp2 = analysis.tp2,
-          tp3 = analysis.tp3,
-          confluences = analysis.confluences,
-          patternName = "Análise Técnica MT5 (${analysis.direction.label})",
-          totalDurationSeconds = tf.durationMinutes * 60,
-          remainingSeconds = tf.durationMinutes * 60,
-          status = SignalStatus.ACTIVE
-        )
-        repository.addOrUpdateSignal(newSignal)
+        if (!analysis.isWait) {
+          val newSignal = Signal(
+            id = "ai_${System.currentTimeMillis()}",
+            symbol = asset,
+            timeframe = tf,
+            direction = analysis.direction,
+            confidence = analysis.confidence,
+            entry = analysis.entry,
+            stopLoss = analysis.stopLoss,
+            tp1 = analysis.tp1,
+            tp2 = analysis.tp2,
+            tp3 = analysis.tp3,
+            confluences = analysis.confluences,
+            patternName = "Confluência MT5 (${analysis.direction.label})",
+            totalDurationSeconds = tf.durationMinutes * 60,
+            remainingSeconds = tf.durationMinutes * 60,
+            status = SignalStatus.ACTIVE
+          )
+          repository.addOrUpdateSignal(newSignal)
+        }
 
-        // Play MT5 bell alert for high confidence
-        if (analysis.confidence >= 85) {
+        // Play alert sound according to decision
+        if (analysis.direction == SignalDirection.WAIT) {
+          soundManager.playSignalAlert(SoundAlertTone.PRICE_PING, triggerHaptic = false)
+        } else if (analysis.confidence >= 75) {
           soundManager.playSignalAlert(SoundAlertTone.MT5_BELL_ALERT, triggerHaptic = true)
         }
       }
