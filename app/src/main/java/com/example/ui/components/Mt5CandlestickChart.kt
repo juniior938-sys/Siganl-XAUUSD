@@ -14,10 +14,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
@@ -47,7 +49,6 @@ import com.example.ui.theme.Mt5GridLine
 import com.example.ui.theme.Mt5Purple
 import com.example.ui.theme.Mt5TextPrimary
 import com.example.ui.theme.Mt5TextSecondary
-import com.example.ui.theme.Mt5VolumeBar
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -60,6 +61,7 @@ fun Mt5CandlestickChart(
   activeSignal: Signal?,
   annotations: List<SMCAnnotation>,
   chartStyle: ChartStyle = ChartStyle.CANDLESTICKS,
+  isCrosshairActive: Boolean = false,
   showVolumes: Boolean = true,
   showGrid: Boolean = true,
   showBidAskLines: Boolean = true,
@@ -69,34 +71,30 @@ fun Mt5CandlestickChart(
   var crosshairY by remember { mutableStateOf<Float?>(null) }
   val textMeasurer = rememberTextMeasurer()
   val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+  val fullDateTimeFormat = remember { SimpleDateFormat("dd.MM HH:mm", Locale.getDefault()) }
 
   Box(
     modifier = modifier
       .testTag("mt5_candlestick_chart")
       .fillMaxWidth()
-      .height(380.dp)
+      .height(390.dp)
       .background(Mt5DarkBackground)
   ) {
     if (candles.isNotEmpty()) {
       Canvas(
         modifier = Modifier
           .fillMaxSize()
-          .pointerInput(candles) {
+          .pointerInput(candles, isCrosshairActive) {
             detectTapGestures(
               onTap = { offset ->
                 val candleWidth = (size.width - 64.dp.toPx()) / candles.size
                 val idx = (offset.x / candleWidth).toInt().coerceIn(0, candles.size - 1)
-                if (crosshairIndex == idx) {
-                  crosshairIndex = null
-                  crosshairY = null
-                } else {
-                  crosshairIndex = idx
-                  crosshairY = offset.y
-                }
+                crosshairIndex = idx
+                crosshairY = offset.y
               }
             )
           }
-          .pointerInput(candles) {
+          .pointerInput(candles, isCrosshairActive) {
             detectDragGestures(
               onDragStart = { offset ->
                 val candleWidth = (size.width - 64.dp.toPx()) / candles.size
@@ -108,9 +106,7 @@ fun Mt5CandlestickChart(
                 crosshairIndex = (change.position.x / candleWidth).toInt().coerceIn(0, candles.size - 1)
                 crosshairY = change.position.y
               },
-              onDragEnd = {
-                // keep or clear
-              }
+              onDragEnd = {}
             )
           }
       ) {
@@ -268,7 +264,7 @@ fun Mt5CandlestickChart(
                 color = Mt5Purple.copy(alpha = 0.8f),
                 topLeft = Offset(leftX, minOf(topY, bottomY)),
                 size = Size(rightX - leftX, kotlin.math.abs(bottomY - topY)),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+                style = Stroke(width = 1.dp.toPx())
               )
               drawText(
                 textMeasurer = textMeasurer,
@@ -439,7 +435,7 @@ fun Mt5CandlestickChart(
             style = TextStyle(color = Mt5BearRed, fontSize = 8.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
           )
 
-          // Take Profit line (Red/Teal Dashed)
+          // Take Profit line (Green Dashed)
           drawLine(
             color = Mt5BullGreen,
             start = Offset(chartWidth * 0.35f, tpY),
@@ -478,7 +474,6 @@ fun Mt5CandlestickChart(
           )
 
           // Right Price Badges for Bid and Ask
-          // Bid Badge (Blue)
           drawRect(
             color = Mt5BidBlue,
             topLeft = Offset(chartWidth + 1.dp.toPx(), bidY - 8.dp.toPx()),
@@ -491,7 +486,6 @@ fun Mt5CandlestickChart(
             style = TextStyle(color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
           )
 
-          // Ask Badge (Red)
           drawRect(
             color = Mt5AskRed,
             topLeft = Offset(chartWidth + 1.dp.toPx(), askY - 8.dp.toPx()),
@@ -505,13 +499,16 @@ fun Mt5CandlestickChart(
           )
         }
 
-        // 8. Crosshair Cursor (when dragged/tapped)
-        crosshairIndex?.let { cIdx ->
-          val candle = candles[cIdx]
-          val cX = cIdx * candleSpacing + candleSpacing / 2f
+        // 8. Crosshair Cursor (with exact price & timestamp at intersection point)
+        val activeCrosshairIndex = crosshairIndex ?: if (isCrosshairActive) candleCount - 5 else null
+        if (activeCrosshairIndex != null) {
+          val candle = candles[activeCrosshairIndex.coerceIn(0, candleCount - 1)]
+          val cX = activeCrosshairIndex * candleSpacing + candleSpacing / 2f
           val cY = crosshairY ?: priceToY(candle.close)
+          val priceAtCursor = yToPrice(cY)
+          val timeAtCursor = fullDateTimeFormat.format(Date(candle.timestamp))
 
-          // Vertical & Horizontal crosshair lines
+          // Vertical & Horizontal crosshair lines across entire chart
           drawLine(
             color = Mt5Crosshair,
             start = Offset(cX, 0f),
@@ -527,10 +524,53 @@ fun Mt5CandlestickChart(
             pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f), 0f)
           )
 
+          // Center Intersection Reticle
+          drawCircle(
+            color = Mt5BidBlue,
+            radius = 4.dp.toPx(),
+            center = Offset(cX, cY)
+          )
+          drawCircle(
+            color = Color.White,
+            radius = 2.dp.toPx(),
+            center = Offset(cX, cY)
+          )
+
+          // Floating Intersection Tooltip Badge (Exact Price + Exact Timestamp at intersection)
+          val badgeText = "${formatMt5Price(priceAtCursor.toDouble(), symbol.decimals)} | $timeAtCursor"
+          val badgeWidth = 148.dp.toPx()
+          val badgeHeight = 22.dp.toPx()
+          val badgeX = if (cX + badgeWidth + 10.dp.toPx() < chartWidth) cX + 10.dp.toPx() else cX - badgeWidth - 10.dp.toPx()
+          val badgeY = if (cY - badgeHeight - 8.dp.toPx() > paddingTop) cY - badgeHeight - 8.dp.toPx() else cY + 10.dp.toPx()
+
+          drawRoundRect(
+            color = Color(0xEE1E222D),
+            topLeft = Offset(badgeX, badgeY),
+            size = Size(badgeWidth, badgeHeight),
+            cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
+          )
+          drawRoundRect(
+            color = Mt5BidBlue,
+            topLeft = Offset(badgeX, badgeY),
+            size = Size(badgeWidth, badgeHeight),
+            cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
+            style = Stroke(width = 1.2.dp.toPx())
+          )
+          drawText(
+            textMeasurer = textMeasurer,
+            text = badgeText,
+            topLeft = Offset(badgeX + 6.dp.toPx(), badgeY + 4.dp.toPx()),
+            style = TextStyle(
+              color = Color.White,
+              fontSize = 9.sp,
+              fontWeight = FontWeight.Bold,
+              fontFamily = FontFamily.Monospace
+            )
+          )
+
           // Right axis crosshair price tag
-          val priceAtCursor = yToPrice(cY)
           drawRect(
-            color = Mt5DarkSurfaceElevated,
+            color = Color.White,
             topLeft = Offset(chartWidth + 1.dp.toPx(), cY - 8.dp.toPx()),
             size = Size(paddingRight - 2.dp.toPx(), 16.dp.toPx())
           )
@@ -538,26 +578,25 @@ fun Mt5CandlestickChart(
             textMeasurer = textMeasurer,
             text = formatMt5Price(priceAtCursor.toDouble(), symbol.decimals),
             topLeft = Offset(chartWidth + 4.dp.toPx(), cY - 6.dp.toPx()),
-            style = TextStyle(color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+            style = TextStyle(color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
           )
 
           // Bottom axis crosshair time tag
-          val timeAtCursor = timeFormat.format(Date(candle.timestamp))
           drawRect(
-            color = Mt5DarkSurfaceElevated,
-            topLeft = Offset(cX - 22.dp.toPx(), height - paddingBottom + 2.dp.toPx()),
-            size = Size(44.dp.toPx(), 16.dp.toPx())
+            color = Color.White,
+            topLeft = Offset(cX - 24.dp.toPx(), height - paddingBottom + 2.dp.toPx()),
+            size = Size(48.dp.toPx(), 16.dp.toPx())
           )
           drawText(
             textMeasurer = textMeasurer,
-            text = timeAtCursor,
-            topLeft = Offset(cX - 18.dp.toPx(), height - paddingBottom + 4.dp.toPx()),
-            style = TextStyle(color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+            text = timeFormat.format(Date(candle.timestamp)),
+            topLeft = Offset(cX - 20.dp.toPx(), height - paddingBottom + 4.dp.toPx()),
+            style = TextStyle(color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
           )
         }
 
         // 9. MT5 Top-Left OHLC Readout
-        val activeCandle = crosshairIndex?.let { candles[it] } ?: candles.last()
+        val activeCandle = activeCrosshairIndex?.let { candles[it.coerceIn(0, candleCount - 1)] } ?: candles.last()
         val ohlcText = "O: ${formatMt5Price(activeCandle.open.toDouble(), symbol.decimals)}  H: ${formatMt5Price(activeCandle.high.toDouble(), symbol.decimals)}  L: ${formatMt5Price(activeCandle.low.toDouble(), symbol.decimals)}  C: ${formatMt5Price(activeCandle.close.toDouble(), symbol.decimals)}"
         val ohlcColor = if (activeCandle.isBullish) Mt5BullGreen else Mt5BearRed
 

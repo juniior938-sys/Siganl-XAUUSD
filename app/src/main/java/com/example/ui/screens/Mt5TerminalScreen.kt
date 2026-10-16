@@ -20,10 +20,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ViewSidebar
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.ContentCopy
@@ -63,6 +64,7 @@ import com.example.data.model.ChartStyle
 import com.example.data.model.Signal
 import com.example.data.model.Timeframe
 import com.example.ui.components.Mt5CandlestickChart
+import com.example.ui.components.Mt5MarketWatchSidebar
 import com.example.ui.components.Mt5OneClickTradeBar
 import com.example.ui.theme.Mt5Amber
 import com.example.ui.theme.Mt5BearRed
@@ -72,7 +74,6 @@ import com.example.ui.theme.Mt5BullGreen
 import com.example.ui.theme.Mt5DarkBackground
 import com.example.ui.theme.Mt5DarkSurface
 import com.example.ui.theme.Mt5DarkSurfaceElevated
-import com.example.ui.theme.Mt5TextMuted
 import com.example.ui.theme.Mt5TextPrimary
 import com.example.ui.theme.Mt5TextSecondary
 import com.example.ui.viewmodel.MegaTradingViewModel
@@ -97,203 +98,233 @@ fun Mt5TerminalScreen(
   val showBidAskLines by viewModel.showBidAskLines.collectAsState()
   val isAnalyzing by viewModel.isAnalyzing.collectAsState()
 
+  var isCrosshairActive by remember { mutableStateOf(false) }
+  var isMarketWatchOpen by remember { mutableStateOf(false) }
   var assetMenuExpanded by remember { mutableStateOf(false) }
   val scrollState = rememberScrollState()
 
-  Column(
-    modifier = modifier
-      .fillMaxSize()
-      .background(Mt5DarkBackground)
-      .padding(horizontal = 10.dp, vertical = 6.dp)
-      .verticalScroll(scrollState)
-  ) {
-    // 1. Top MT5 Asset and Control Bar
-    Row(
+  Box(modifier = modifier.fillMaxSize()) {
+    Column(
       modifier = Modifier
-        .fillMaxWidth()
-        .clip(RoundedCornerShape(12.dp))
-        .background(Mt5DarkSurface)
-        .padding(horizontal = 10.dp, vertical = 8.dp),
-      horizontalArrangement = Arrangement.SpaceBetween,
-      verticalAlignment = Alignment.CenterVertically
+        .fillMaxSize()
+        .background(Mt5DarkBackground)
+        .padding(horizontal = 10.dp, vertical = 6.dp)
+        .verticalScroll(scrollState)
     ) {
-      // Asset Dropdown Selector
-      Box {
-        Row(
-          modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .clickable { assetMenuExpanded = true }
-            .padding(horizontal = 6.dp, vertical = 4.dp),
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Text(
-            text = selectedAsset.code,
-            color = Mt5TextPrimary,
-            style = MaterialTheme.typography.titleLarge,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Bold
-          )
-          Spacer(modifier = Modifier.width(4.dp))
-          Icon(
-            imageVector = Icons.Default.KeyboardArrowDown,
-            contentDescription = "Selecionar Ativo",
-            tint = Mt5TextSecondary,
-            modifier = Modifier.size(20.dp)
-          )
+      // 1. Top MT5 Asset and Control Bar
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .clip(RoundedCornerShape(12.dp))
+          .background(Mt5DarkSurface)
+          .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        // Left: Market Watch Sidebar Button + Asset Dropdown
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          IconButton(
+            onClick = { isMarketWatchOpen = true },
+            modifier = Modifier
+              .testTag("market_watch_toggle_button")
+              .size(34.dp)
+              .clip(RoundedCornerShape(8.dp))
+              .background(Mt5DarkSurfaceElevated)
+          ) {
+            Icon(
+              imageVector = Icons.AutoMirrored.Filled.ViewSidebar,
+              contentDescription = "Abrir Market Watch",
+              tint = Mt5BidBlue,
+              modifier = Modifier.size(18.dp)
+            )
+          }
+
+          Spacer(modifier = Modifier.width(6.dp))
+
+          // Asset Dropdown Selector
+          Box {
+            Row(
+              modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { assetMenuExpanded = true }
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(
+                text = selectedAsset.code,
+                color = Mt5TextPrimary,
+                style = MaterialTheme.typography.titleLarge,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold
+              )
+              Spacer(modifier = Modifier.width(2.dp))
+              Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = "Selecionar Ativo",
+                tint = Mt5TextSecondary,
+                modifier = Modifier.size(18.dp)
+              )
+            }
+
+            DropdownMenu(
+              expanded = assetMenuExpanded,
+              onDismissRequest = { assetMenuExpanded = false },
+              modifier = Modifier.background(Mt5DarkSurfaceElevated)
+            ) {
+              for (asset in AssetSymbol.entries) {
+                DropdownMenuItem(
+                  text = {
+                    Text(
+                      text = "${asset.code} (${asset.category})",
+                      color = if (asset == selectedAsset) Mt5BidBlue else Mt5TextPrimary,
+                      fontFamily = FontFamily.Monospace,
+                      fontWeight = if (asset == selectedAsset) FontWeight.Bold else FontWeight.Normal
+                    )
+                  },
+                  onClick = {
+                    viewModel.selectAsset(asset)
+                    assetMenuExpanded = false
+                  }
+                )
+              }
+            }
+          }
         }
 
-        DropdownMenu(
-          expanded = assetMenuExpanded,
-          onDismissRequest = { assetMenuExpanded = false },
-          modifier = Modifier.background(Mt5DarkSurfaceElevated)
+        // Right Actions: Crosshair Toggle, Chart Style, Grid Toggle
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-          for (asset in AssetSymbol.entries) {
-            DropdownMenuItem(
-              text = {
-                Text(
-                  text = "${asset.code} (${asset.category})",
-                  color = if (asset == selectedAsset) Mt5BidBlue else Mt5TextPrimary,
-                  fontFamily = FontFamily.Monospace,
-                  fontWeight = if (asset == selectedAsset) FontWeight.Bold else FontWeight.Normal
-                )
-              },
-              onClick = {
-                viewModel.selectAsset(asset)
-                assetMenuExpanded = false
+          // Dedicated MT5 Crosshair Tool Button
+          IconButton(
+            onClick = { isCrosshairActive = !isCrosshairActive },
+            modifier = Modifier
+              .testTag("crosshair_tool_button")
+              .size(34.dp)
+              .clip(RoundedCornerShape(8.dp))
+              .background(if (isCrosshairActive) Mt5BidBlue else Mt5DarkSurfaceElevated)
+          ) {
+            Icon(
+              imageVector = Icons.Default.Add,
+              contentDescription = "Ferramenta de Mira / Crosshair",
+              tint = if (isCrosshairActive) Color.White else Mt5TextPrimary,
+              modifier = Modifier.size(18.dp)
+            )
+          }
+
+          // Toggle Candlesticks / Bars / Line
+          IconButton(
+            onClick = {
+              val nextStyle = when (chartStyle) {
+                ChartStyle.CANDLESTICKS -> ChartStyle.BARS
+                ChartStyle.BARS -> ChartStyle.LINE
+                ChartStyle.LINE -> ChartStyle.CANDLESTICKS
               }
+              viewModel.setChartStyle(nextStyle)
+            },
+            modifier = Modifier
+              .size(34.dp)
+              .clip(RoundedCornerShape(8.dp))
+              .background(Mt5DarkSurfaceElevated)
+          ) {
+            Icon(
+              imageVector = when (chartStyle) {
+                ChartStyle.CANDLESTICKS -> Icons.Default.BarChart
+                ChartStyle.BARS -> Icons.Default.BarChart
+                ChartStyle.LINE -> Icons.Default.ShowChart
+              },
+              contentDescription = "Mudar Estilo de Gráfico",
+              tint = Mt5TextPrimary,
+              modifier = Modifier.size(18.dp)
+            )
+          }
+
+          // Toggle Grid
+          IconButton(
+            onClick = { viewModel.toggleGrid() },
+            modifier = Modifier
+              .size(34.dp)
+              .clip(RoundedCornerShape(8.dp))
+              .background(Mt5DarkSurfaceElevated)
+          ) {
+            Icon(
+              imageVector = Icons.Default.GridOn,
+              contentDescription = "Grade",
+              tint = if (showGrid) Mt5BidBlue else Mt5TextSecondary,
+              modifier = Modifier.size(18.dp)
             )
           }
         }
       }
 
-      // Chart Style & Toggle Actions
+      Spacer(modifier = Modifier.height(6.dp))
+
+      // 2. MT5 Timeframe Row (M1, M5, M15, M30, H1, H4, D1)
       Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        modifier = Modifier
+          .fillMaxWidth()
+          .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
       ) {
-        // Toggle Candlesticks / Bars / Line
-        IconButton(
-          onClick = {
-            val nextStyle = when (chartStyle) {
-              ChartStyle.CANDLESTICKS -> ChartStyle.BARS
-              ChartStyle.BARS -> ChartStyle.LINE
-              ChartStyle.LINE -> ChartStyle.CANDLESTICKS
-            }
-            viewModel.setChartStyle(nextStyle)
-          },
-          modifier = Modifier.size(32.dp)
-        ) {
-          Icon(
-            imageVector = when (chartStyle) {
-              ChartStyle.CANDLESTICKS -> Icons.Default.BarChart
-              ChartStyle.BARS -> Icons.Default.BarChart
-              ChartStyle.LINE -> Icons.Default.ShowChart
-            },
-            contentDescription = "Mudar Estilo de Gráfico",
-            tint = Mt5TextPrimary,
-            modifier = Modifier.size(18.dp)
-          )
-        }
-
-        // Toggle Grid
-        IconButton(
-          onClick = { viewModel.toggleGrid() },
-          modifier = Modifier.size(32.dp)
-        ) {
-          Icon(
-            imageVector = Icons.Default.GridOn,
-            contentDescription = "Grade",
-            tint = if (showGrid) Mt5BidBlue else Mt5TextMuted,
-            modifier = Modifier.size(18.dp)
-          )
-        }
-
-        // Ask/Bid Lines Toggle
-        Box(
-          modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (showBidAskLines) Mt5DarkSurfaceElevated else Color.Transparent)
-            .border(1.dp, if (showBidAskLines) Mt5Border else Color.Transparent, RoundedCornerShape(6.dp))
-            .clickable { viewModel.toggleBidAskLines() }
-            .padding(horizontal = 6.dp, vertical = 4.dp)
-        ) {
-          Text(
-            text = "Bid/Ask",
-            color = if (showBidAskLines) Mt5TextPrimary else Mt5TextMuted,
-            style = MaterialTheme.typography.labelSmall,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 9.sp
-          )
+        for (tf in Timeframe.entries) {
+          val isSelected = tf == selectedTimeframe
+          Box(
+            modifier = Modifier
+              .testTag("timeframe_${tf.label}")
+              .clip(RoundedCornerShape(8.dp))
+              .background(if (isSelected) Mt5BidBlue else Mt5DarkSurface)
+              .border(1.dp, if (isSelected) Mt5BidBlue else Mt5Border, RoundedCornerShape(8.dp))
+              .clickable { viewModel.selectTimeframe(tf) }
+              .padding(horizontal = 12.dp, vertical = 6.dp)
+          ) {
+            Text(
+              text = tf.label,
+              color = if (isSelected) Color.White else Mt5TextSecondary,
+              style = MaterialTheme.typography.labelMedium,
+              fontWeight = FontWeight.Bold,
+              fontFamily = FontFamily.Monospace
+            )
+          }
         }
       }
-    }
 
-    Spacer(modifier = Modifier.height(6.dp))
+      Spacer(modifier = Modifier.height(8.dp))
 
-    // 2. MT5 Timeframe Row (M1, M5, M15, M30, H1, H4, D1)
-    Row(
-      modifier = Modifier
-        .fillMaxWidth()
-        .horizontalScroll(rememberScrollState()),
-      horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-      for (tf in Timeframe.entries) {
-        val isSelected = tf == selectedTimeframe
-        Box(
-          modifier = Modifier
-            .testTag("timeframe_${tf.label}")
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (isSelected) Mt5BidBlue else Mt5DarkSurface)
-            .border(1.dp, if (isSelected) Mt5BidBlue else Mt5Border, RoundedCornerShape(8.dp))
-            .clickable { viewModel.selectTimeframe(tf) }
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-        ) {
-          Text(
-            text = tf.label,
-            color = if (isSelected) Color.White else Mt5TextSecondary,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace
-          )
-        }
-      }
-    }
-
-    Spacer(modifier = Modifier.height(8.dp))
-
-    // 3. Full MetaTrader 5 Canvas Chart
-    Mt5CandlestickChart(
-      candles = candles,
-      quote = quote,
-      symbol = selectedAsset,
-      activeSignal = activeSignal,
-      annotations = annotations,
-      chartStyle = chartStyle,
-      showVolumes = showVolumes,
-      showGrid = showGrid,
-      showBidAskLines = showBidAskLines
-    )
-
-    Spacer(modifier = Modifier.height(8.dp))
-
-    // 4. MetaTrader 5 One-Click Quick Trade Bar
-    Mt5OneClickTradeBar(
-      quote = quote,
-      onExecuteTrade = { direction, lots ->
-        viewModel.executeOneClickOrder(direction, lots)
-      }
-    )
-
-    Spacer(modifier = Modifier.height(10.dp))
-
-    // 5. Active Signal & Entry Parameters (MT5 Format)
-    activeSignal?.let { sig ->
-      Mt5SignalInfoCard(
-        signal = sig,
+      // 3. Full MetaTrader 5 Canvas Chart (with interactive Crosshair Tool)
+      Mt5CandlestickChart(
+        candles = candles,
         quote = quote,
-        onCopy = {
-          val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-          val text = """
+        symbol = selectedAsset,
+        activeSignal = activeSignal,
+        annotations = annotations,
+        chartStyle = chartStyle,
+        isCrosshairActive = isCrosshairActive,
+        showVolumes = showVolumes,
+        showGrid = showGrid,
+        showBidAskLines = showBidAskLines
+      )
+
+      Spacer(modifier = Modifier.height(8.dp))
+
+      // 4. MetaTrader 5 One-Click Quick Trade Bar
+      Mt5OneClickTradeBar(
+        quote = quote,
+        onExecuteTrade = { direction, lots ->
+          viewModel.executeOneClickOrder(direction, lots)
+        }
+      )
+
+      Spacer(modifier = Modifier.height(10.dp))
+
+      // 5. Active Signal & Entry Parameters (MT5 Format)
+      activeSignal?.let { sig ->
+        Mt5SignalInfoCard(
+          signal = sig,
+          quote = quote,
+          onCopy = {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val text = """
 ORDEM MT5: ${sig.symbol.code} (${sig.timeframe.label})
 Tipo: ${sig.direction.label}
 Entrada: ${"%.${sig.symbol.decimals}f".format(sig.entry)}
@@ -301,60 +332,72 @@ Stop Loss: ${"%.${sig.symbol.decimals}f".format(sig.stopLoss)}
 Take Profit 1: ${"%.${sig.symbol.decimals}f".format(sig.tp1)}
 Take Profit 2: ${"%.${sig.symbol.decimals}f".format(sig.tp2)}
 Take Profit 3: ${"%.${sig.symbol.decimals}f".format(sig.tp3)}
-          """.trimIndent()
-          clipboard.setPrimaryClip(ClipData.newPlainText("MT5 Order", text))
-          Toast.makeText(context, "Parâmetros de ordem MT5 copiados!", Toast.LENGTH_SHORT).show()
-        }
-      )
-    }
-
-    Spacer(modifier = Modifier.height(10.dp))
-
-    // 6. Action Button: "ANALISAR COM GEMINI IA"
-    Button(
-      onClick = {
-        viewModel.triggerGeminiAnalysis()
-      },
-      enabled = !isAnalyzing,
-      modifier = Modifier
-        .testTag("terminal_analyze_button")
-        .fillMaxWidth()
-        .height(48.dp),
-      shape = RoundedCornerShape(12.dp),
-      colors = ButtonDefaults.buttonColors(
-        containerColor = Mt5BidBlue,
-        contentColor = Color.White
-      )
-    ) {
-      if (isAnalyzing) {
-        CircularProgressIndicator(
-          color = Color.White,
-          modifier = Modifier.size(18.dp),
-          strokeWidth = 2.dp
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-          text = "ANALISANDO PRICE ACTION MT5...",
-          style = MaterialTheme.typography.labelLarge,
-          fontWeight = FontWeight.Bold
-        )
-      } else {
-        Icon(
-          imageVector = Icons.Default.AutoAwesome,
-          contentDescription = null,
-          tint = Color.White,
-          modifier = Modifier.size(18.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-          text = "ANALISAR COM GEMINI IA (${selectedAsset.code})",
-          style = MaterialTheme.typography.labelLarge,
-          fontWeight = FontWeight.Bold
+            """.trimIndent()
+            clipboard.setPrimaryClip(ClipData.newPlainText("MT5 Order", text))
+            Toast.makeText(context, "Parâmetros de ordem MT5 copiados!", Toast.LENGTH_SHORT).show()
+          }
         )
       }
+
+      Spacer(modifier = Modifier.height(10.dp))
+
+      // 6. Action Button: "ANALISAR COM GEMINI IA"
+      Button(
+        onClick = {
+          viewModel.triggerGeminiAnalysis()
+        },
+        enabled = !isAnalyzing,
+        modifier = Modifier
+          .testTag("terminal_analyze_button")
+          .fillMaxWidth()
+          .height(48.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.buttonColors(
+          containerColor = Mt5BidBlue,
+          contentColor = Color.White
+        )
+      ) {
+        if (isAnalyzing) {
+          CircularProgressIndicator(
+            color = Color.White,
+            modifier = Modifier.size(18.dp),
+            strokeWidth = 2.dp
+          )
+          Spacer(modifier = Modifier.width(8.dp))
+          Text(
+            text = "ANALISANDO PRICE ACTION MT5...",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold
+          )
+        } else {
+          Icon(
+            imageVector = Icons.Default.AutoAwesome,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(18.dp)
+          )
+          Spacer(modifier = Modifier.width(8.dp))
+          Text(
+            text = "ANALISAR COM GEMINI IA (${selectedAsset.code} ${selectedTimeframe.label})",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold
+          )
+        }
+      }
+
+      Spacer(modifier = Modifier.height(20.dp))
     }
 
-    Spacer(modifier = Modifier.height(20.dp))
+    // MT5 Market Watch Sliding Sidebar Panel
+    Mt5MarketWatchSidebar(
+      isOpen = isMarketWatchOpen,
+      quotes = quotes,
+      selectedAsset = selectedAsset,
+      onSelectAsset = { asset ->
+        viewModel.selectAsset(asset)
+      },
+      onClose = { isMarketWatchOpen = false }
+    )
   }
 }
 
